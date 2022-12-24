@@ -2,7 +2,7 @@
 Check VCS status by hosts in JSON file
 
 To install requirements.txt use:
-`pip install requirements.txt`
+`pip install -r requirements.txt`
 ```
 python main.py -h
 usage: main.py [-h] [--file FILE] [--key KEY]
