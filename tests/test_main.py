@@ -2,19 +2,11 @@ import json
 import logging
 import os
 import unittest
-from argparse import Namespace
 
 import main
 
 
 class MainTest(unittest.TestCase):
-    def test_parse_args(self):
-        """
-        If no args used,
-        script still got necessary vars in None
-        """
-        self.assertEqual(main.parse_args(), Namespace(file=None, key=None))
-
     def test_get_json(self):
         """
         Positive scenarios of main.get_json()
