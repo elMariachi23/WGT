@@ -1,3 +1,4 @@
+import logging
 import socket
 
 import paramiko
@@ -8,6 +9,7 @@ class Server:
     Connect to server via Paramiko,
     retrieve necessary data and disconnect
     """
+
     def __init__(self, host, user, pwd=None, key=None):
         """
         Required parameters
@@ -23,31 +25,32 @@ class Server:
         self.work_dir = '~/bw/'
         self.connection = None
         self.vcs_type = None
+        logging.getLogger("paramiko").setLevel(logging.WARNING)
 
     def __enter__(self):
         self.connection = paramiko.SSHClient()
         self.connection.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         try:
-            print('~Connecting to host "{}" with user "{}"...'.format(self.host, self.username), end='')
+            logging.info(f'Connecting to host "{self.host}" with user "{self.username}"...')
             if not self.ssh_key:
                 self.connection.connect(self.host, 22, self.username, self.password)
             else:
                 self.connection.connect(hostname=self.host, port=22,
                                         username=self.username, key_filename=self.ssh_key)
-            print('Connected!')
+            logging.info('Connected!')
             return self
         except FileNotFoundError as err:
-            print('ERROR! SSH-KEY file exception')
-            print(err)
+            logging.error('SSH-KEY file exception!')
+            logging.error(err)
         except paramiko.ssh_exception.AuthenticationException:
-            print('ERROR! Authentication failed')
-            print('Password failed' if not self.ssh_key else 'Key is invalid', 'for', self.username)
+            logging.error('Authentication failed!')
+            logging.error(f'{"Password failed" if not self.ssh_key else "Key is invalid"} for "{self.username}"')
         except TimeoutError:
-            print('\nConnection Timeout. Host either wrong or down'.format(self.host))
+            logging.error('Connection Timeout. Host either wrong or down')
         except socket.gaierror as err:
-            print('ERROR!\n', err)
+            logging.error(err)
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type=None, exc_val=None, exc_tb=None):
         self.connection.close()
         return True
 
@@ -57,14 +60,14 @@ class Server:
         from remote server
         :return: (str) branch name and revision
         """
-        print('Retrieving data...', end='')
+        logging.info('Retrieving data...')
         self.get_vcs_type()
         check_branch, check_revision = self.generate_correct_commands()
-        result = self.connection.exec_command('cd {} && {}'.format(self.work_dir, check_branch))[1]
+        result = self.connection.exec_command(f'cd {self.work_dir} && {check_branch}')[1]
         branch = result.read().decode().replace('\n', '')
-        result = self.connection.exec_command('cd {} && {}'.format(self.work_dir, check_revision))[1]
+        result = self.connection.exec_command(f'cd {self.work_dir} && {check_revision}')[1]
         revision = result.read().decode().replace('\n', '')
-        print('Done!')
+        logging.info('Done!')
         return branch, revision
 
     def generate_correct_commands(self):
@@ -74,10 +77,10 @@ class Server:
         :return: command strings to get branch name and revision
         """
         if self.vcs_type == 'GIT':
-            branch_command = 'git branch | awk \'{print $2}\''
-            revision_command = 'git log -1 --pretty=oneline | awk \'{print $1}\''
+            branch_command = "git branch | awk '{print $2}'"
+            revision_command = "git log -1 --pretty=oneline | awk '{print $1}'"
         else:
-            branch_command = 'svn info --show-item relative-url | awk -F "/" \'{print $(NF)}\''
+            branch_command = "svn info --show-item relative-url | awk -F \"/\" '{print $(NF)}'"
             revision_command = 'svn info --show-item revision'
         return branch_command, revision_command
 
@@ -86,7 +89,7 @@ class Server:
         Determines self.vcs_type in directory
         Exits if no VCS found
         """
-        stdout, stderr = self.connection.exec_command('ls -a {}'.format(self.work_dir))[1:3]
+        stdout, stderr = self.connection.exec_command(f'ls -a {self.work_dir}')[1:3]
         out = stdout.read().decode().split('\n')
         if '.svn' in out:
             self.vcs_type = 'SVN'
@@ -95,9 +98,9 @@ class Server:
         else:
             errors = stderr.read().decode()
             if 'Permission denied' in errors:
-                print('ERROR! Permission denied to "{}" for user "{}"'.format(self.work_dir, self.username))
+                logging.error(f'Permission denied to "{self.work_dir}" for user "{self.username}"')
             elif 'No such file or directory' in errors or not errors:
-                print('ERROR! No VCS found in directory "{}"'.format(self.work_dir))
+                logging.error(f'No VCS found in directory "{self.work_dir}"')
             else:
-                print(errors)
-            self.__exit__(None, None, None)
+                logging.error(errors)
+            self.__exit__()
