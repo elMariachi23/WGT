@@ -22,19 +22,20 @@ def parse_args():
     return parser.parse_args()
 
 
-def get_json():
+def get_json(json_path=None):
     """
     Getting json
     either from the link
     or from the file
+    :param: Path/to/json/file or https://url/to/json
     :return: JSON object
     """
-    if args.file:
-        if args.file.startswith('https:') or args.file.startswith("http:"):
+    if json_path:
+        if json_path.startswith('https:') or json_path.startswith("http:"):
             requests.packages.urllib3.disable_warnings()
             try:
                 print('Receiving data by given url... ', end='')
-                json_file = requests.get(args.file, verify=False)
+                json_file = requests.get(json_path, verify=False)
                 response = json.loads(json_file.text)
                 print('Success')
                 filename = 'info_from_url.json'
@@ -42,14 +43,14 @@ def get_json():
             except json.decoder.JSONDecodeError:
                 sys.exit('ERROR!\n{}\n'
                          'Data received by url "{}" '
-                         'is not in JSON format!'.format(json_file.text, args.file))
+                         'is not in JSON format!'.format(json_file.text, json_path))
             except requests.exceptions.ConnectionError as err:
-                sys.exit('ERROR! \nConnection to "{}" failed: \n{}'.format(args.file, err))
+                sys.exit('ERROR! \nConnection to "{}" failed: \n{}'.format(json_path, err))
         else:
-            if Path(args.file).is_file():
-                json_file = args.file
+            if Path(json_path).is_file():
+                json_file = json_path
             else:
-                sys.exit('ERROR! File "{}" does not exist or it\'s not a file!'.format(args.file))
+                sys.exit('ERROR! File "{}" does not exist or it\'s not a file!'.format(json_path))
     else:
         json_file = [file for file in os.listdir() if file.endswith('.json')]
         if not json_file:
@@ -74,18 +75,19 @@ def get_json():
         sys.exit('ERROR! {}'.format(err))
 
 
-def collect_data_from_hosts(info):
+def collect_data_from_hosts(info, ssh_key=None):
     """
     Iter over hosts in JSON
     to collect VCS info
     :param info: JSON data
+    :param ssh_key: SSH-Key to connect to hosts
     :return: None, filling received JSON data with collected info
     """
     clusters = info['hosts'].keys()
     for cluster in clusters:
         host = info['hosts'][cluster]['host']
         user = info['hosts'][cluster]['user']
-        with Server(host, user, user, key=args.key if args.key else None) as server:
+        with Server(host, user, user, key=ssh_key) as server:
             branch, revision = server.get_vcs_info()
             vcs_system = server.vcs_type
             info['hosts'][cluster]['vcs_system'] = vcs_system
@@ -96,8 +98,8 @@ def collect_data_from_hosts(info):
 if __name__ == '__main__':
     args = parse_args()
     print('#' * 10, 'Program starting!')
-    json_data, filename = get_json()
-    collect_data_from_hosts(json_data)
+    json_data, filename = get_json(args.file)
+    collect_data_from_hosts(json_data, args.key)
     print('Writing info to file: {}'.format(filename))
     with open(filename, 'w') as file:
         json.dump(json_data, file)
